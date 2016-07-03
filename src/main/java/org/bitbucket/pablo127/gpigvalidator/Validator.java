@@ -1,135 +1,277 @@
 package org.bitbucket.pablo127.gpigvalidator;
 
+import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.bitbucket.pablo127.gpigvalidator.exception.ValidationException;
-import org.bitbucket.pablo127.gpigvalidator.exception.WrongAnnotationTypeException;
-import org.bitbucket.pablo127.gpigvalidator.exception.WrongFieldTypeException;
-import org.hibernate.validator.constraints.Email;
+import org.bitbucket.pablo127.gpigvalidator.constraint.ConstraintValidator;
+import org.bitbucket.pablo127.gpigvalidator.constraint.EmailValidator;
+import org.bitbucket.pablo127.gpigvalidator.constraint.NotNullValidator;
+import org.bitbucket.pablo127.gpigvalidator.constraint.SizeValidator;
+import org.bitbucket.pablo127.gpigvalidator.exception.*;
+import org.bitbucket.pablo127.gpigvalidator.util.StringBuilderUtil;
 
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 public final class Validator {
 
-    private static final String EMAIL_PATTERN = "^[_A-Za-z0-9-\\+]+(\\.[_A-Za-z0-9-]+)*@"
-            + "[A-Za-z0-9-]+(\\.[A-Za-z0-9]+)*(\\.[A-Za-z]{2,})$";
-
-    // TODO maybe customized annotations later
-    // TODO annotations with documentations
-    // TODO Size for collections
-
     private Validator() {
+    }
+
+    private static List<ConstraintValidator> getValidators() {
+        return ImmutableList.of(
+                new NotNullValidator(),
+                new EmailValidator(),
+                new SizeValidator()
+        );
     }
 
     /**
      * Check if object is correct in case of constraints.
      * @param objectToValidate
-     * @return
-     * @throws IllegalAccessException
+     * @return true if object is correct; false otherwise
+     * @throws InternalException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
      */
-    public static boolean isCorrectObject(Object objectToValidate) throws IllegalAccessException {
-        // TODO
+    public static boolean isCorrectObject(Object objectToValidate) {
         Class clazz = objectToValidate.getClass();
-        System.out.println("XXX "+ clazz.getName());
+        boolean result = true;
+        for (Field field : clazz.getDeclaredFields())
+            result &= isCorrectFieldForAnnotations(objectToValidate, field);
 
-        System.out.println("class fields number "+clazz.getDeclaredFields().length);
-        for (Field field : clazz.getDeclaredFields()) {
-            for (Annotation annotation : field.getAnnotations()) {
-                field.setAccessible(true);
-                System.out.println("Field "+field.get(objectToValidate) + " annotation "
-                        + annotation.annotationType().toString());
-
-                Object objectValue = field.get(objectToValidate);
-
-                Class<? extends Annotation> annotationType = annotation.annotationType();
-                if (!analyzeCorrectness(field, annotation, objectValue, annotationType))
-                    return false;
-            }
-        }
-        return true;
-    }
-
-    public static boolean isCorrectField() {
-        // TODO
-        return false;
+        return result;
     }
 
     /**
-     *
+     * Validate object. If it is incorrect throw specific ValidationException.
      * @param objectToValidate
-     * @param exceptionToThrow
+     * @param exceptionToThrow - exception specific type to throw after incorrect object
+     * @throws InternalException
+     * @throws ValidationException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
      */
     public static void validateObject(Object objectToValidate, Class<? extends ValidationException> exceptionToThrow) {
-        // TODO
-
-    }
-
-    public static void validateField() {
-        // TODO
+        Class clazz = objectToValidate.getClass();
+        for (Field field : clazz.getDeclaredFields()) {
+            Optional<String> errorsOpt = checkFieldForErrors(objectToValidate, field);
+            if (errorsOpt.isPresent())
+                throwValidationException(exceptionToThrow, errorsOpt.get());
+        }
     }
 
     /**
-     *
-     * @return key - name of field; value - error message
+     * Validate object. If it is incorrect throw ValidationException.
+     * @param objectToValidate
+     * @throws InternalException
+     * @throws ValidationException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
      */
-    public static Map<String, String> getValidationErrorMessages() {
-        // TODO
-        return ImmutableMap.of();
+    public static void validateObject(Object objectToValidate) {
+        validateObject(objectToValidate, ValidationException.class);
     }
 
     /**
-     *
-     * @return error message for all fields with bugs
+     * Validate specific field in object. If it is incorrect throw ValidationException.
+     * @param objectToValidate
+     * @param fieldName - name of field to validate
+     * @throws InternalException
+     * @throws ValidationException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
+     * @throws NotExistingField
      */
-    public static String getValidationErrorMessage() {
-        // TODO
-        return "";
+    public static void validateField(Object objectToValidate, String fieldName) {
+        validateField(objectToValidate, fieldName, ValidationException.class);
     }
 
-    private static boolean analyzeCorrectness(Field field, Annotation annotation, Object objectValue,
-                                              Class<? extends Annotation> annotationType) {
-        if (annotationType.equals(NotNull.class)) {
-            return isNotNull(objectValue);
-        } else if (annotationType.equals(Size.class)) {
-            Size sizeAnnotation = (Size) annotation;
-            return hasCorrectSize(objectValue, field.getType(), sizeAnnotation);
-        } else if (annotationType.equals(Email.class)) {
-            Email emailAnnotation = (Email) annotation;
-            return isCorrectEmailField(objectValue, field.getType(), emailAnnotation);
+    /**
+     * Validate specific field in object. If it is incorrect throw specific ValidationException.
+     * @param objectToValidate
+     * @param fieldName - name of field to validate.
+     * @param exceptionToThrow - exception specific type to throw after incorrect field in object.
+     * @throws InternalException
+     * @throws ValidationException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
+     * @throws NotExistingField
+     */
+    public static void validateField(Object objectToValidate, String fieldName,
+                                     Class<? extends ValidationException> exceptionToThrow) {
+        Class clazz = objectToValidate.getClass();
+        for (Field field : clazz.getDeclaredFields()) {
+            if (field.getName().equals(fieldName)) {
+                Optional<String> errorsOpt = checkFieldForErrors(objectToValidate, field);
+                if (errorsOpt.isPresent())
+                    throwValidationException(exceptionToThrow, errorsOpt.get());
+                else
+                    return;
+            }
         }
-        // TODO more constraints
-        throw new WrongAnnotationTypeException();
+        throw new NotExistingField();
     }
 
-    private static boolean isCorrectEmailField(Object objectValue, Class<?> type, Email emailAnnotation) {
-        if (type.equals(String.class)) {
-            Pattern pattern = Pattern.compile(EMAIL_PATTERN);
-            return pattern.matcher((String) objectValue)
-                    .matches();
+    /**
+     * Validate object and return map with incorrect messages.
+     * @param objectToValidate
+     * @return immutable map with: key - name of field; value - error message
+     * @throws InternalException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
+     */
+    public static Map<String, String> validateWithErrorMessages(Object objectToValidate) {
+        final Map<String, String> errorsMap = new HashMap<>();
+
+        validate(objectToValidate, new ErrorCollectStrategy() {
+            @Override
+            public void collectError(String fieldName, String errorMessage) {
+                errorsMap.put(fieldName, errorMessage);
+            }
+        });
+
+        return ImmutableMap.copyOf(errorsMap);
+    }
+
+    /**
+     * Validate object and return string with incorrect messages.
+     * @param objectToValidate
+     * @return String with all error messages.
+     * @throws InternalException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
+     */
+    public static Optional<String> validateWithErrorMessage(Object objectToValidate) {
+        final StringBuilder messageBuilder = new StringBuilder();
+
+        validate(objectToValidate, new ErrorCollectStrategy() {
+            @Override
+            public void collectError(String fieldName, String errorMessage) {
+                StringBuilderUtil.appendWithSpaceIfNeeded(messageBuilder, errorMessage);
+            }
+        });
+
+        return messageBuilder.length() > 0
+                ? Optional.of(messageBuilder.toString())
+                : Optional.<String>absent();
+    }
+
+    /**
+     * Method checks if specific field from object is correct.
+     * @param objectToValidate
+     * @param fieldName
+     * @return true if field is correct; false otherwise
+     * @throws InternalException
+     * @throws WrongAnnotationTypeException
+     * @throws WrongFieldTypeException
+     * @throws NotExistingField
+     */
+    public static boolean isCorrectField(Object objectToValidate, String fieldName) {
+        Class clazz = objectToValidate.getClass();
+        Optional<Field> fieldOpt = getField(clazz.getDeclaredFields(), fieldName);
+        if (fieldOpt.isPresent())
+            return isCorrectFieldForAnnotations(objectToValidate, fieldOpt.get());
+
+        throw new NotExistingField();
+    }
+
+    protected static Optional<String> checkAnnotationConstraintError(Object objectToValidate, Field field,
+                                                                     Annotation annotation) {
+        try {
+            field.setAccessible(true);
+
+            Object fieldValue = field.get(objectToValidate);
+
+            Optional<String> errorOpt = checkErrorInFieldForAnnotation(annotation, fieldValue);
+            if (errorOpt.isPresent())
+                return Optional.of(String.format("Field '%s' %s", field.getName(), errorOpt.get()));
+            return errorOpt;
+        } catch (IllegalArgumentException | IllegalAccessException e) {
+            throw new InternalException(e);
         }
-        throw new WrongFieldTypeException();
     }
 
-    private static boolean hasCorrectSize(Object objectValue, Class<?> type, Size sizeAnnotation) {
-        int size = -1;
-        if (type.equals(String.class))
-            size = ((String) objectValue).length();
-        else if (type.equals(Map.class))
-            size = ((Map) objectValue).size();
-        else if (type.equals(List.class))
-            size = ((List) objectValue).size();
-
-        if (size == -1)
-            throw new WrongFieldTypeException();
-        return sizeAnnotation.min() <= size && size <= sizeAnnotation.max();
+    private static void validate(Object objectToValidate, ErrorCollectStrategy errorCollectStrategy) {
+        Class clazz = objectToValidate.getClass();
+        for (Field field : clazz.getDeclaredFields()) {
+            Optional<String> errorsOpt = checkFieldForErrors(objectToValidate, field);
+            if (errorsOpt.isPresent())
+                errorCollectStrategy.collectError(field.getName(), errorsOpt.get());
+        }
     }
 
-    private static boolean isNotNull(Object o) {
-        return o != null;
+    private static Optional<String> checkFieldForErrors(Object objectToValidate, Field field) {
+        StringBuilder errorMessageBuilder = new StringBuilder();
+        for (Annotation annotation : field.getAnnotations()) {
+            Optional<String> annotationErrorOpt = checkAnnotationConstraintError(objectToValidate, field, annotation);
+            if (annotationErrorOpt.isPresent())
+                StringBuilderUtil.appendWithSpaceIfNeeded(errorMessageBuilder, annotationErrorOpt.get());
+        }
+
+        return errorMessageBuilder.length() > 0
+                ? Optional.of(errorMessageBuilder.toString())
+                : Optional.<String>absent();
+    }
+
+    private static boolean isAnnotationConstraintCorrect(Object objectToValidate, Field field, Annotation annotation) {
+        return !checkAnnotationConstraintError(objectToValidate, field, annotation)
+                .isPresent();
+    }
+
+    private static void throwValidationException(Class<? extends ValidationException> exceptionToThrow,
+                                                 String messageToThrow) {
+        try {
+            throw exceptionToThrow.getDeclaredConstructor(String.class)
+                    .newInstance(messageToThrow);
+        } catch (ReflectiveOperationException e) {
+            throw new InternalException("ValidationException class is incorrect. It has to be public outer class.", e);
+        }
+    }
+
+    private static Optional<Field> getField(Field[] fields, String fieldName) {
+        for (Field field : fields) {
+            if (field.getName().equals(fieldName))
+                return Optional.of(field);
+        }
+
+        return Optional.absent();
+    }
+
+    private static Optional<String> checkErrorInFieldForAnnotation(Annotation annotation, Object fieldValue) {
+        Optional<ConstraintValidator> validatorOpt = getConstraintValidatorOptional(annotation.annotationType());
+
+        if (validatorOpt.isPresent())
+            return validatorOpt.get().getErrorMessage(fieldValue, annotation);
+
+        throw new WrongAnnotationTypeException("Currently no such an annotation is supported.");
+    }
+
+    private static boolean isCorrectFieldForAnnotations(Object objectToValidate, Field field) {
+        boolean result = true;
+        for (Annotation annotation : field.getAnnotations())
+            result &= isAnnotationConstraintCorrect(objectToValidate, field, annotation);
+
+        return result;
+    }
+
+    private static Optional<ConstraintValidator> getConstraintValidatorOptional(
+            final Class<? extends Annotation> annotationType) {
+        return FluentIterable.from(getValidators())
+                .firstMatch(new Predicate<ConstraintValidator>() {
+                    @Override
+                    public boolean apply(ConstraintValidator validator) {
+                        return annotationType.equals(validator.getAnnotationType());
+                    }
+                });
+    }
+
+    private interface ErrorCollectStrategy {
+        void collectError(String fieldName, String errorMessage);
     }
 }
