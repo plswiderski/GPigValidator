@@ -1,0 +1,19 @@
+language: java
+jdk:
+  - oraclejdk8
+
+addons:
+  sonarqube:
+    organization: "pablo127-github"
+    token:
+      secure: "axIrYbJbR6xLTKaBri4vI+cnVHKfAlJEbKpSPkFSsKKAX+RBviwDJOsbwSlvLZ33XoIhECz2GdepzJS9DUW1DChMeI9YdNQI45546TgvY/SwVL3EboRJkpWVGE+MIyoT9PFJS/iOGJYbNzHS6FzirjonJcJH7F88X48HWI8Z/o7ZRHjP9BBVmH6VY327CoQhxjjXru6AksqG+x7YrkdPh0KOTKyKkStJubwjTLwupJvpm58EoxGlvAgU00swSIFLis9kajDwFUq5W15yV3NR9TfcVujEow0jEeFeEs/q9zPQpmy1AFCpwU5K7E8V+LX3IZqJNRMVp1SHM/Atf017Z/ULvQeY9DbSapZU8mj0i3tXafS3lPzKg5qIlrdo3N1BYfOkpvH3I8sRjfuYQ1v4fO79kuWQg3qKzh17Gqak72WcOxBWuHIHEBdWsA16pO7t3F0X5XC2+yUBcMkNozNFx7tzgzibA6wP03MqUgh8fj6cwyIQSp8NJrN/NVNieKLTPT6wOfJfwxd+6ACfUf527zFJxBm3rrtmusEV2nuw9WMVF1uv3glcBDECyTN2izyWpmiGFzMguUUemvx+P3ULSVyp+aY5dmSDk5DF4bqlsCTpOFSCaHOj/v404mdGobYjBvD2Kx2vLTohnhz/MiTfmDMXW+7v85bSyEjw5MpnezA="
+
+before_install:
+  - chmod +x gradlew
+
+script: 
+  - ./gradlew build
+  - ls -la
+  - ls ./build/jacoco -la
+  - ls ./build -la
+  - sonar-scanner -X
