@@ -1,5 +1,7 @@
 #GPigValidator
 
+[![Build Status](https://travis-ci.org/pablo127/GPigValidator.svg?branch=master)](https://travis-ci.org/pablo127/GPigValidator)
+
 Multiplatform Java library which validates the data from classes depending on validation annotations from `javax.validation.constraints` ([full list of javax constraints' annotations](http://docs.oracle.com/javaee/6/api/javax/validation/constraints/package-summary.html)) and `org.hibernate.validator.constraints` ([full list of hibernate constraints' annotations](https://docs.jboss.org/hibernate/validator/4.3/api/org/hibernate/validator/constraints/package-summary.html)) packages. It enables to check correctness and throw customized exceptions and messages in different languages. English and Polish are built-in languages.
 
 Current version: `v0.1`.
