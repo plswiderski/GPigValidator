@@ -13,7 +13,4 @@ before_install:
 
 script: 
   - ./gradlew build
-  - ls -la
-  - ls ./build/jacoco -la
-  - ls ./build -la
   - sonar-scanner -X
