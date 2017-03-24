@@ -5,6 +5,13 @@ apply plugin: 'java'
 apply plugin: 'signing'
 apply plugin: 'maven'
 
+// Change the variable to true if you want to uploadArchives
+project.ext.set("release", false)
+if (!project.release) {
+    ext.set("ossrhUsername", "empty")
+    ext.set("ossrhPassword", "empty")
+}
+
 sourceCompatibility = 1.7
 
 repositories {
@@ -26,7 +33,8 @@ artifacts {
 }
 
 signing {
-    sign configurations.archives
+    if (project.release)
+        sign configurations.archives
 }
 
 uploadArchives {
