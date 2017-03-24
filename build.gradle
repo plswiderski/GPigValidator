@@ -2,12 +2,76 @@ group 'org.bitbucket.pablo127'
 version '0.1'
 
 apply plugin: 'java'
-apply plugin: "jacoco"
+apply plugin: 'signing'
+apply plugin: 'maven'
 
 sourceCompatibility = 1.7
 
 repositories {
     mavenCentral()
+}
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+signing {
+    sign configurations.archives
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: ossrhUsername, password: ossrhPassword)
+            }
+
+            pom.project {
+                name 'GPigValidator'
+                packaging 'jar'
+                // optionally artifactId can be defined here
+                description 'Multiplatform Java library which validates the data from classes depending on validation annotations from javax.validation.constraints and org.hibernate.validator.constraints packages. It enables to check correctness and throw customized exceptions and messages in different languages. English and Polish are built-in languages.'
+                url 'https://bitbucket.org/pablo127/gpigvalidator'
+
+                scm {
+                    connection 'scm:git:https://bitbucket.org/pablo127/gpigvalidator.git'
+                    developerConnection 'scm:git:https://bitbucket.org/pablo127/gpigvalidator.git'
+                    url 'https://bitbucket.org/pablo127/gpigvalidator.git'
+                }
+
+                licenses {
+                    license {
+                        name 'MIT License'
+                        url 'https://github.com/pablo127/GPigValidator/blob/master/LICENCE.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'pablo127'
+                        name 'Paweł Świderski'
+                        email 'pablo127@gmail.com'
+                    }
+                }
+            }
+        }
+    }
 }
 
 dependencies {

@@ -13,3 +13,5 @@ gradle-app.setting
 .gradletasknamecache
 /.sonar
 /scanBySonar.bat
+/gradle.properties
+/key.gpg
