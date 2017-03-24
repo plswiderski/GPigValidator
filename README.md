@@ -11,7 +11,7 @@ Current version: `0.1`.
 ## [Requirements](https://bitbucket.org/pablo127/gpigvalidator/wiki/requirements)
 
 ## Licence
-It is **free** for commercial and non-commercial use.
+GPigValidator is covered by MIT licence. It is **free** for commercial and non-commercial use.
 
 ## Sample
 Sample project is available [here](https://bitbucket.org/snippets/pablo127/EkKgE). All available functions are shown in action. It is fully operational gradle project shown with output.
